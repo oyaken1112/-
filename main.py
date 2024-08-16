@@ -1,36 +1,36 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
+import yfinance as yf
+import plotly.express as px
 
-def get_data(days, tickers):
-    df = pd.DataFrame()
-    for company in tickers.keys():
-        tkr = yf.Ticker(tickers[company])
-        hist = tkr.history(period='1mo')  # 正しい期間を使用
-        hist.index = pd.to_datetime(hist.index).strftime('%d %B %Y')  # 修正
-        hist = hist[['Close']]  # データを終値だけ抽出
-        hist.columns = [company]  # データのカラムをyf.Tickerのリクエストした会社名に変更
-        hist = hist.T  # 欲しい情報が逆なので、転置する
-        hist.index.name = 'Name'  # インデックスの名前を変更
-        df = pd.concat([df, hist])  # データを結合
-    return df
+st.title('Stock Data Viewer')
 
-st.title('株価可視化アプリ')
-st.sidebar.write('株価可視化のためのツールです。')
+# サポートされている有効な期間
+valid_periods = ['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max']
 
-tickers = {
-    'apple': 'AAPL',
-    'microsoft': 'MSFT',
-    'google': 'GOOGL'
-}
+# ユーザー入力を受け取る
+ticker_symbol = st.text_input('Enter Ticker Symbol (e.g. AAPL, MSFT, GOOGL):', 'AAPL')
+period = st.selectbox('Select Period:', valid_periods, index=valid_periods.index('1mo'))
 
-days = st.sidebar.slider(
-    '日数',
-    1, 30, 20
-)
-
+# データを取得する
 try:
-    df = get_data(days, tickers)
-    st.write(df)
+    stock_data = yf.download(ticker_symbol, period=period)
+    
+    # 日付インデックスをリセットしてDataFrameのカラムにする
+    stock_data.reset_index(inplace=True)
+
+    if not stock_data.empty:
+        st.subheader(f'Stock Data for {ticker_symbol}')
+        st.write(stock_data)
+        
+        # 日付形式を適切に変換する
+        stock_data['Date'] = pd.to_datetime(stock_data['Date'])
+        stock_data['Date'] = stock_data['Date'].dt.strftime('%Y-%m-%d')
+        
+        # プロットを作成する
+        fig = px.line(stock_data, x='Date', y='Close', title=f'{ticker_symbol} Closing Prices')
+        st.plotly_chart(fig)
+    else:
+        st.write("No data found for the given ticker symbol and period.")
 except Exception as e:
-    st.error(f"Error: {e}")
+    st.write(f"An error occurred: {e}")
