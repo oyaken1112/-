@@ -28,14 +28,15 @@ st.write(f"過去 {days}日間 の株価")  # 取得する日数を表示
 def get_data(days, tickers):
     df = pd.DataFrame()  # 株価を代入するための空箱を用意
 
-    # 選択した株価の数だけ yf.Tickerでリクエストしてデータを取得する
     for company in tickers.keys():
         tkr = yf.Ticker(tickers[company])
         hist = tkr.history(period=f'{days}d')  # スライドバーで指定した日数で取得した情報を絞る
         
-        # DatetimeIndexを変換する
-        hist.index = hist.index.strftime('%d %B %Y')  # indexを日付のフォーマットに変更
+        # 確認と変換
+        if not isinstance(hist.index, pd.DatetimeIndex):
+            hist.index = pd.to_datetime(hist.index)  # Convert index to DatetimeIndex
         
+        hist.index = hist.index.strftime('%d %B %Y')  # indexを日付のフォーマットに変更
         hist = hist[['Close']]  # データを終値だけ抽出
         hist.columns = [company]  # データのカラムをyf.Tickerのリクエストした企業名に設定
         hist = hist.T  # 欲しい情報が逆なので、転置する
