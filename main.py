@@ -1,29 +1,36 @@
-import yfinance as yf  # Yahoo Financeから株価情報を取得するための機能をインポート
+import streamlit as st
+import yfinance as yf
 import pandas as pd
 
 def get_data(days, tickers):
     df = pd.DataFrame()
-    
-    for company in tickers:
-        print(f"Fetching data for {company}...")  # デバッグメッセージ
-        tkr = yf.Ticker(company)
-        hist = tkr.history(period=f'{days}d')
-        
-        if hist.empty:
-            print(f"No data found for {company}. Skipping...")
-            continue
-        
-        # indexを日付のフォーマットに変更
-        hist.index = hist.index.to_series().apply(lambda x: x.strftime('%d %B %Y'))
-        
-        hist["Name"] = company
-        df = pd.concat([df, hist])
-        print(f"Data for {company} added to the dataframe.")  # デバッグメッセージ
-    
+    for company in tickers.keys():
+        tkr = yf.Ticker(tickers[company])
+        hist = tkr.history(period='1mo')  # 正しい期間を使用
+        hist.index = pd.to_datetime(hist.index).strftime('%d %B %Y')  # 修正
+        hist = hist[['Close']]  # データを終値だけ抽出
+        hist.columns = [company]  # データのカラムをyf.Tickerのリクエストした会社名に変更
+        hist = hist.T  # 欲しい情報が逆なので、転置する
+        hist.index.name = 'Name'  # インデックスの名前を変更
+        df = pd.concat([df, hist])  # データを結合
     return df
 
-days = 30  # 取得する日数
-tickers = ["AAPL", "MSFT", "GOOGL"]  # 企業のティッカーシンボル
-df = get_data(days, tickers)  # リクエストする企業一覧すべてと変換するtickersを引数に株価取得
+st.title('株価可視化アプリ')
+st.sidebar.write('株価可視化のためのツールです。')
 
-print(df.head())  # デバッグメッセージとして先頭の数行を表示
+tickers = {
+    'apple': 'AAPL',
+    'microsoft': 'MSFT',
+    'google': 'GOOGL'
+}
+
+days = st.sidebar.slider(
+    '日数',
+    1, 30, 20
+)
+
+try:
+    df = get_data(days, tickers)
+    st.write(df)
+except Exception as e:
+    st.error(f"Error: {e}")
