@@ -22,33 +22,24 @@ st.sidebar.write("こちらは株価可視化ツールです。以下のオプ�
 
 st.sidebar.write("表示日数選択")  # サイドバーに表示
 
-#サイドバーに表示する期間オプションを定義
-period_options = {
-    '1日': '1d',
-    '5日': '5d',
-    '1ヶ月': '1mo',
-    '3ヶ月': '3mo',
-    '6ヶ月': '6mo'
-}
+# サイドバーに表示　取得するための日数をスライドバーで表示し、daysに代入
+days = st.sidebar.slider('日数', 1, 50, 20)
 
-# サイドバーに表示　取得するための期間を選択するドロップダウンメニューを表示し、periodに代入
-period = st.sidebar.selectbox('期間を選択してください。', list(period_options.keys()))
-
-st.write(f"過去 {period} の株価")  # 取得する日数を表示
+st.write(f"過去 {days}日間 の株価")  # 取得する日数を表示
 
 # @st.cache_dataで読み込みが早くなるように処理を保持しておける
 
 
 # @st.cache_data
-def get_data(period, tickers):
+def get_data(days, tickers):
     df = pd.DataFrame()  # 株価を代入するための空箱を用意
 
     # 選択した株価の数だけ yf.Tickerでリクエストしてデータを取得する
     for company in tickers.keys():
         # 設定した銘柄一覧でリクエストの為の7203.Tなどに変換をして、それをyf.Tickerで株価リクエスト
         tkr = yf.Ticker(tickers[company])
-        hist = tkr.history(period=period_options[period])   # 選択した期間で取得した情報を絞る
-        hist.index = pd.to_datetime(hist.index).strftime('%d %B %Y')  # indexを日付のフォーマットに変更
+        hist = tkr.history(period=f'{days}d')  # スライドバーで指定した日数で取得した情報を絞る
+        hist.index = hist.index.strftime('%d %B %Y')  # indexを日付のフォーマットに変更
         hist = hist[['Close']]  # データを終値だけ抽出
         hist.columns = [company]  # データのカラムをyf.Tickerのリクエストした企業名に設定
         hist = hist.T  # 欲しい情報が逆なので、転置する
@@ -64,7 +55,7 @@ ymin, ymax = st.sidebar.slider(
     0.0, 5000.0, (0.0, 5000.0)
 )  # サイドバーに表示
 
-df = get_data(period, tickers)  # リクエストする企業一覧すべてと変換するtickersを引数に株価取得
+df = get_data(days, tickers)  # リクエストする企業一覧すべてと変換するtickersを引数に株価取得
 
 
 # 取得したデータから抽出するための配列を生成し、companiesに代入
