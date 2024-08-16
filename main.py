@@ -1,36 +1,84 @@
-import streamlit as st
-import pandas as pd
-import yfinance as yf
-import plotly.express as px
+import streamlit as st  # フロントエンドを扱うstreamlitの機能をインポート
+import pandas as pd  # データフレームを扱う機能をインポート
+import yfinance as yf  # Yahoo Financeから株価情報を取得するための機能をインポート
+import altair as alt  # チャート可視化機能をインポート
 
-st.title('Stock Data Viewer')
+# 取得する銘柄の名前とキーを変換する一覧を設定
+tickers = {
+    'apple': 'AAPL',
+    'facebook': 'META',
+    'google': 'GOOGL',
+    'microsoft': 'MSFT',
+    'netflix': 'NFLX',
+    'amazon': 'AMZN',
+    'TOTO': '5332.T',
+    'TOYOTA': '7203.T',
+}
 
-# サポートされている有効な期間
-valid_periods = ['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max']
+st.title('株価可視化アプリ')  # タイトル
 
-# ユーザー入力を受け取る
-ticker_symbol = st.text_input('Enter Ticker Symbol (e.g. AAPL, MSFT, GOOGL):', 'AAPL')
-period = st.selectbox('Select Period:', valid_periods, index=valid_periods.index('1mo'))
+st.sidebar.write("こちらは株価可視化ツールです。以下のオプションから表示日数を指定できます。")  # サイドバーに表示
 
-# データを取得する
-try:
-    stock_data = yf.download(ticker_symbol, period=period)
-    
-    # 日付インデックスをリセットしてDataFrameのカラムにする
-    stock_data.reset_index(inplace=True)
+# サイドバーに表示　取得するための日数をスライドバーで表示し、daysに代入
+days = st.sidebar.slider('日数', 1, 50, 20)
 
-    if not stock_data.empty:
-        st.subheader(f'Stock Data for {ticker_symbol}')
-        st.write(stock_data)
+st.write(f"過去 {days}日間 の株価")  # 取得する日数を表示
+
+@st.cache_data
+def get_data(days, tickers):
+    df = pd.DataFrame()  # 株価を代入するための空箱を用意
+
+    # 選択した株価の数だけ yf.Tickerでリクエストしてデータを取得する
+    for company in tickers.keys():
+        tkr = yf.Ticker(tickers[company])
+        hist = tkr.history(period=f'{days}d')  # スライドバーで指定した日数で取得した情報を絞る
         
-        # 日付形式を適切に変換する
-        stock_data['Date'] = pd.to_datetime(stock_data['Date'])
-        stock_data['Date'] = stock_data['Date'].dt.strftime('%Y-%m-%d')
+        # DatetimeIndexを変換する
+        hist.index = hist.index.strftime('%d %B %Y')  # indexを日付のフォーマットに変更
         
-        # プロットを作成する
-        fig = px.line(stock_data, x='Date', y='Close', title=f'{ticker_symbol} Closing Prices')
-        st.plotly_chart(fig)
-    else:
-        st.write("No data found for the given ticker symbol and period.")
-except Exception as e:
-    st.write(f"An error occurred: {e}")
+        hist = hist[['Close']]  # データを終値だけ抽出
+        hist.columns = [company]  # データのカラムをyf.Tickerのリクエストした企業名に設定
+        hist = hist.T  # 欲しい情報が逆なので、転置する
+        hist.index.name = 'Name'  # indexの名前をNameにする
+        df = pd.concat([df, hist])  # 用意した空のデータフレームに設定したhistのデータを結合する
+    return df  # 返り値としてdfを返す
+
+# チャートに表示する範囲をスライドで表示し、それぞれをymin, ymaxに代入
+st.sidebar.write("株価の範囲指定")  # サイドバーに表示
+ymin, ymax = st.sidebar.slider(
+    '範囲を指定してください。',
+    0.0, 5000.0, (0.0, 5000.0)
+)  # サイドバーに表示
+
+df = get_data(days, tickers)  # リクエストする企業一覧すべてと変換するtickersを引数に株価取得
+
+# 取得したデータから抽出するための配列を生成し、companiesに代入
+companies = st.multiselect(
+    '会社名を選択してください。',
+    list(df.index),
+    ['google', 'apple', 'TOYOTA'],  # 最初に表示する企業名を設定
+)
+
+data = df.loc[companies]  # 取得したデータから抽出するための配列で絞ってdataに代入
+st.write("株価 ", data.sort_index())  # dataにあるindexを表示
+data = data.T.reset_index()  # dataを抽出して転置
+
+# 企業ごとの別々のカラムにデータを表示する必要ないので企業を１つのカラムに統一
+data = pd.melt(data, id_vars=['Date']).rename(
+    columns={'value': 'Stock Prices'}
+)
+
+# dataとスライドバーで設定した最大最小値を元にalt.Chartを使って株価チャートを作成
+chart = (
+    alt.Chart(data)
+    .mark_line(opacity=0.8, clip=True)
+    .encode(
+        x="Date:T",
+        y=alt.Y("Stock Prices:Q", stack=None,
+                scale=alt.Scale(domain=[ymin, ymax])),
+        color='Name:N'
+    )
+)
+
+# 作成したチャートをstreamlitで表示
+st.altair_chart(chart, use_container_width=True)

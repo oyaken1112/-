@@ -19,5 +19,4 @@ tzdata==2024.1
 urllib3==2.2.2
 webencodings==0.5.1
 yfinance==0.2.41
-plotly==5.23.0
 streamlit
